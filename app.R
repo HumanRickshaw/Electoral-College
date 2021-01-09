@@ -9,13 +9,9 @@ library(tidyr)
 
 
 
-##############SETUP##############
-
-options(scipen = 999)
-
-
-
 ##############CONSTANTS##############
+#No Scientific Notation.
+options(scipen = 999)
 
 #Metrics.
 pop_list <- c("Electoral College",
@@ -35,7 +31,7 @@ state_abb <- c(state.abb[1:8],
                state.abb[9:50],
                "USA")
 
-abb_list <- rep(state_abb, 6)
+abb_list <- rep(state_abb, 7)
 
 
 
@@ -60,6 +56,7 @@ df <- df %>%
   filter(state != "United States")
 
 
+
 ##############FUNCTIONS##############
 
 #Format tab title.
@@ -76,8 +73,20 @@ create_html <- function(description, title, link, end) {
 
 
 
+#Gets the other party.
+get_other_party <- function(party) {
+  setdiff(c("Republican", "Democrat"), party)
+}
+
+
+
 ##############UI##############
 ui <- fluidPage(
+  
+  #Remove warnings.
+  tags$style(type = "text/css",
+             ".shiny-output-error {visibility: hidden;}",
+             ".shiny-output-error:before {visibility: hidden;}"),
   
   titlePanel("US Election and Electoral College Exploration"),
   sidebarLayout(
@@ -141,6 +150,7 @@ ui <- fluidPage(
     
 
     ##############MAIN PANEL##############
+    
     mainPanel(width = 9,
       navbarPage(uiOutput("main_panel"), id = "mytabs",
 
@@ -148,25 +158,23 @@ ui <- fluidPage(
                  tabPanel(textOutput("tab1_title"), value = 1,
                           br(),
                           plotlyOutput("pop_plot", height = 600),
-                          br(),
-                          textOutput("tab1_summary")),
+                          verbatimTextOutput("tab1_summary")),
 
                  #Electoral College Weight per State.
                  tabPanel(textOutput("tab2_title"), value = 2,
                           br(),
                           plotlyOutput("vote_w_plot", height = 600),
-                          br(),
-                          textOutput("tab2_summary")),
+                          verbatimTextOutput("tab2_summary")),
 
                  #Counterintuitive State Comparisons.                          
                  tabPanel(textOutput("tab3_title"), value = 3,
                           br(),
                           plotlyOutput("comparisons_plot", height = 600),
+                          uiOutput("tab3_exceptions"),
                           br(),
-                          uiOutput("faithless_electors"),
-                          textOutput("special_year"),
+                          uiOutput("tab3_faithless"),
                           br(),
-                          textOutput("tab3_summary")),
+                          verbatimTextOutput("tab3_summary")),
 
                  #Sum of States.                 
                  tabPanel(textOutput("tab4_title"), value = 4,
@@ -174,12 +182,7 @@ ui <- fluidPage(
                           htmlOutput("tab4_text1"),
                           br(),
                           plotlyOutput("sum_plot", height = 600),
-                          br(),
-                          textOutput("tab4_summary1"),
-                          br(),
-                          textOutput("tab4_summary2"),
-                          br(),
-                          textOutput("tab4_summary3")),
+                          verbatimTextOutput("tab4_summary")),
 
                  navbarMenu("More",
                             tabPanel("General Information",
@@ -247,6 +250,8 @@ server <- function(input, output, session) {
           "Electoral College Votes.")
   }
   
+  
+  
   #Update dataframe for plotlys.
   fill_df <- reactive({
 
@@ -302,7 +307,7 @@ server <- function(input, output, session) {
       #Party and number of votes of user selected state.
       anchor_party <- ref_df$aff
       #Opposite color.
-      other_party <- setdiff(c("Republican", "Democrat"), anchor_party)
+      other_party <- get_other_party(anchor_party)
       
       
       #Exceptions.
@@ -456,6 +461,7 @@ server <- function(input, output, session) {
     
     if (input$mytabs %in% c(1,2)) {
       
+      #Values by State.
       if (input$mytabs == 1) {
         
         fill_index <- length(integer(input$color_map))
@@ -474,6 +480,7 @@ server <- function(input, output, session) {
         
         title_text <- paste(input$elec_yr, 'Election Data for each State <br> (Hover for Information)')
         
+      #Electoral College Weight per State.
       } else {
         
         fill_index <- length(integer(input$color_map2))
@@ -500,8 +507,9 @@ server <- function(input, output, session) {
                               ticktext = colorbar_info()[[3]],
                               titlefont = list(size = 16),
                               tickfont = list(size = 12))
-
+    
     } else {
+      #Counterintuitive State Comparisons.
       if (input$mytabs == 3) {
         
         if (fill_df()$aff[1] == "Democrat") {
@@ -523,6 +531,8 @@ server <- function(input, output, session) {
                            paste(paste(state[1], "'s", sep = ""),
                                  other_party, "Votes in", year,
                                  "<br> (Hover for Information)"))
+        
+        #States to Sum.
         } else {
       
           map <- map %>% add_trace(z = ~f,
@@ -545,33 +555,66 @@ server <- function(input, output, session) {
   })
   
   
-  
+
   ##############Values by State##############
   output$tab1_title <- renderText("Values by State")
 
   output$pop_plot <- renderPlotly(map())
 
   output$tab1_summary <- renderText(
-    "This tab was created to provide the base numbers."
+    "This tab was created to provide raw numbers."
   )
     
+  
+  
   ##############Electoral College Weight by State##############
   output$tab2_title <- renderText("Electoral College Weight by State")
   
   output$vote_w_plot <- renderPlotly(map())
 
   output$tab2_summary <- renderText(
-    "This tab was created to divide and show how 2 senators per state drastically increases the the weight of the Electoral College Vote in the lesser populated states."
+    "This tab was created to divide and show how 2 senators per state drastically increases the weight of the\nElectoral College Vote in the lesser populated states."
   )
+  
+  
   
   ##############Counterintuitive State Comparisons##############
   output$tab3_title <- renderText("Counterintuitive State Comparisons")
   
   output$comparisons_plot <- renderPlotly(map())
   
-  output$faithless_electors <- renderUI({
+  output$tab3_exceptions <- renderUI({
     
-    #Helper.
+    if (input$elec_yr == 2008) {
+      exception <- create_html("Nebraska's popular vote split was 452,979 Republican and 333,319 Democrat, resulting in an",
+                               "Electoral College allocation ",
+                               "https://www.nytimes.com/elections/2008/results/states/nebraska.html",
+                               "of 4 to McCain and 1 to Obama.")
+    
+    } else if (input$elec_yr == 2016) {
+      exception <- create_html("Maine's popular vote split was 357,735 Democrat and 335,593 Republican, resulting in an",
+                             "Electoral College allocation ",
+                             "https://www.nytimes.com/elections/2016/results/maine",
+                             "of 3 to Clinton and 1 to Trump.")
+      
+    } else if (input$elec_yr == 2020) {
+    exception <- tagList(create_html("Maine's popular vote split was 435,072 Democrat and 360,737 Republican, resulting in an",
+                                     "Electoral College allocation ",
+                                     "https://www.nytimes.com/interactive/2020/11/03/us/elections/results-maine.html",
+                                     "of 3 to Biden and 1 to Trump."),
+                         create_html("Nebraska's popular vote split was 556,846 Republican and 374,583 Democrat, resulting in an",
+                                     "Electoral College allocation ",
+                                     "https://www.nytimes.com/interactive/2020/11/03/us/elections/results-nebraska.html",
+                                     "of 4 to Trump and 1 to Biden."))
+    }
+    
+    exception
+    
+  })
+  
+  output$tab3_faithless <- renderUI({
+    
+    #Helper Text.
     faithless_link <- function(text) {
       
       year <- input$elec_yr
@@ -579,44 +622,106 @@ server <- function(input, output, session) {
       create_html(paste(text, "  See", sep = ""),
                   paste(year, "Presidential Election"),
                   paste("https://www.270towin.com/", year, "_Election/", sep = ""),
-                  "for more information.")
+                  "for more information.\n\n")
     }
     
     if ((input$elec_yr == 2000) & (input$state_select1 =="District of Columbia")) {
       
-      faithless_link("Of Washington DC's 3 Electoral College Votes, 1 was not cast.")
+      faithless <- faithless_link("Of Washington DC's 3 Electoral College Votes, 1 was not cast.")
       
     } else if ((input$elec_yr == 2004) & (input$state_select1 =="Minnesota")) {
-
-      faithless_link("Of Minnesota's 10 Electoral College Votes, 1 was cast for John Edwards.")
-
+      
+      faithless <- faithless_link("Of Minnesota's 10 Electoral College Votes, 1 was cast for John Edwards.")
+      
     } else if ((input$elec_yr == 2016) & (input$state_select1 %in% c("Hawaii", "Texas", "Washington"))) {
-        
+      
       if (input$state_select1 =="Hawaii") {
         
-        faithless_link("Of Hawaii's 4 Electoral College Votes, 1 was cast for Bernie Sanders.")
+        faithless <- faithless_link("Of Hawaii's 4 Electoral College Votes, 1 was cast for Bernie Sanders.")
         
       } else if (input$state_select1 == "Texas") {
-       
-        faithless_link("Of Texas's 38 Electoral College Votes, 1 was cast for Jon Kasich and 1 was cast for Ron Paul.")
+        
+        faithless <- faithless_link("Of Texas's 38 Electoral College Votes, 1 was cast for Jon Kasich and 1 was cast for Ron Paul.")
         
       } else {
         
-        faithless_link("Of Washington's 12 Electoral College Votes, 3 were cast for Colin Powell and 1 was cast for Faith Spotted Eagle.")
+        faithless <- faithless_link("Of Washington's 12 Electoral College Votes, 3 were cast for Colin Powell and 1 was cast for Faith Spotted Eagle.")
       }
     }
   })
   
-  output$special_year <- renderText({
+  output$tab3_summary <- renderText({
     
-    if (input$elec_yr == 1996) {
-      "In 1996, the Reform Party recieved over 8 million popular votes, but no Electoral College Votes."
+    year <- input$elec_yr
+    
+    #Tab.
+    tab <- "This tab was created to show how popular votes are ignored because of their location.\n\n"
+    
+    #Votes ignored.
+    
+    #Helper.
+    ignored <- function(year) {
+      
+      ignored_text <- function(df, party) {
+        
+        other_party <- get_other_party(party)
+        
+        ignored_votes <- prettyNum((df %>%
+                                      filter(aff == party) %>%
+                                      select(other_party) %>%
+                                      sum),
+                                   big.mark = ",")
+        
+        paste("In", paste(year, ", the", sep = ""), other_party, "party received", ignored_votes, "votes from states won by", paste(party, "s,", sep = ""), "which the Electoral College ignored.\n\n")
+        }
+
+      #Exceptions.
+      if (year == 2008) {
+        #Modify df.
+        ignored_df <- fill_df() %>% 
+          filter(state != "Nebraska")
+        
+      } else if (year == 2016) {
+        #Modify df.
+        ignored_df <- fill_df() %>% 
+          filter(state != "Nebraska")
+        
+      } else if (year == 2020) {
+        #Modify df.
+        
+      } else {
+        ignored_df <- fill_df()
+      }  
+      
+      ignored_rep <- ignored_text(ignored_df, "Democrat")  
+      ignored_dem <- ignored_text(ignored_df, "Republican") 
+      
+      paste(ignored_rep, ignored_dem, sep = "")
     }
+    
+    
+    
+    #Reform Party.
+    
+    #Helper.
+    reform_text <- function(year, votes) {
+      paste("In", year, "the Reform Party recieved", prettyNum(votes, big.mark = ","), "popular votes across the US, which the Electoral College ignored.")
+    }
+    
+    if (year == 1992) {
+      reform <- reform_text(year, 19743821)
+    
+    } else if (year == 1996) {
+      reform <- reform_text(year, 8085294)
+      
+    } else {
+      reform <- ""
+    }
+    
+    #Full text.
+    paste(tab, ignored(year), reform, sep = "")
   })
   
-  output$tab3_summary <- renderText(
-    "This tab was created to show how popular votes are ignored because of their location."
-  )
   
   
   ##############States to Sum##############
@@ -640,9 +745,10 @@ server <- function(input, output, session) {
   
   output$sum_plot <- renderPlotly(map())
   
-  output$tab4_summary1 <- renderText("A common argument I have seen is something along the lines of, 'But if we get rid of the Electoral College, California and New York will decide the president!'.")
-  output$tab4_summary2 <- renderText("This is simply a silly, exaggerated claim, with absolutely no numerical basis from anytime in history.")
-  output$tab4_summary3 <- renderText("This tab was created to show the percentage of a metric from user selected states to the US total.")
+  output$tab4_summary <- renderText(paste("A common argument I have seen is something along the lines of:",
+                                          "\n'But if we get rid of the Electoral College, California and New York will decide the president!'.",
+                                          "\n\nThis is simply a silly, exaggerated claim, with absolutely no numerical basis from anytime in history.",
+                                          "\n\nThis tab was created to show the percentage of a metric from user selected states to the US total."))
   
   
   
