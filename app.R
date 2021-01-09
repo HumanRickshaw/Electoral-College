@@ -147,12 +147,16 @@ ui <- fluidPage(
                  #Values by State.                 
                  tabPanel(textOutput("tab1_title"), value = 1,
                           br(),
-                          plotlyOutput("pop_plot", height = 600)),
+                          plotlyOutput("pop_plot", height = 600),
+                          br(),
+                          textOutput("tab1_summary")),
 
                  #Electoral College Weight per State.
                  tabPanel(textOutput("tab2_title"), value = 2,
                           br(),
-                          plotlyOutput("vote_w_plot", height = 600)),
+                          plotlyOutput("vote_w_plot", height = 600),
+                          br(),
+                          textOutput("tab2_summary")),
 
                  #Counterintuitive State Comparisons.                          
                  tabPanel(textOutput("tab3_title"), value = 3,
@@ -160,7 +164,9 @@ ui <- fluidPage(
                           plotlyOutput("comparisons_plot", height = 600),
                           br(),
                           uiOutput("faithless_electors"),
-                          textOutput("special_year")),
+                          textOutput("special_year"),
+                          br(),
+                          textOutput("tab3_summary")),
 
                  #Sum of States.                 
                  tabPanel(textOutput("tab4_title"), value = 4,
@@ -169,11 +175,11 @@ ui <- fluidPage(
                           br(),
                           plotlyOutput("sum_plot", height = 600),
                           br(),
-                          textOutput("tab4_text2"),
+                          textOutput("tab4_summary1"),
                           br(),
-                          textOutput("tab4_text3"),
+                          textOutput("tab4_summary2"),
                           br(),
-                          textOutput("tab4_text4")),
+                          textOutput("tab4_summary3")),
 
                  navbarMenu("More",
                             tabPanel("General Information",
@@ -545,14 +551,18 @@ server <- function(input, output, session) {
 
   output$pop_plot <- renderPlotly(map())
 
-
+  output$tab1_summary <- renderText(
+    "This tab was created to provide the base numbers."
+  )
     
   ##############Electoral College Weight by State##############
   output$tab2_title <- renderText("Electoral College Weight by State")
   
   output$vote_w_plot <- renderPlotly(map())
 
-  
+  output$tab2_summary <- renderText(
+    "This tab was created to divide and show how 2 senators per state drastically increases the the weight of the Electoral College Vote in the lesser populated states."
+  )
   
   ##############Counterintuitive State Comparisons##############
   output$tab3_title <- renderText("Counterintuitive State Comparisons")
@@ -604,7 +614,9 @@ server <- function(input, output, session) {
     }
   })
   
-  
+  output$tab3_summary <- renderText(
+    "This tab was created to show how popular votes are ignored because of their location."
+  )
   
   
   ##############States to Sum##############
@@ -628,9 +640,9 @@ server <- function(input, output, session) {
   
   output$sum_plot <- renderPlotly(map())
   
-  output$tab4_text2 <- renderText("A common argument I have seen is something along the lines of, 'But if we get rid of the Electoral College, California and New York will decide the president!'.")
-  output$tab4_text3 <- renderText("This is simply a silly, exaggerated claim, with absolutely no numerical basis from anytime in history.")
-  output$tab4_text4 <- renderText("This tab was created to show the percentage of a metric from user selected states to the US total.")
+  output$tab4_summary1 <- renderText("A common argument I have seen is something along the lines of, 'But if we get rid of the Electoral College, California and New York will decide the president!'.")
+  output$tab4_summary2 <- renderText("This is simply a silly, exaggerated claim, with absolutely no numerical basis from anytime in history.")
+  output$tab4_summary3 <- renderText("This tab was created to show the percentage of a metric from user selected states to the US total.")
   
   
   
