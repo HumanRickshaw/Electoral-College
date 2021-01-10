@@ -98,7 +98,7 @@ ui <- fluidPage(
                  h3("Select:"),
                  radioButtons("elec_yr",
                               "Election Year :",
-                              c(1996, 2000, 2004, 2008, 2012, 2016)),
+                              c(2016, 2012, 2008, 2004, 2000, 1996)),
                  h6("November 2020 Election Data is not yet available."),
       
                  #Values by State.
@@ -170,8 +170,6 @@ ui <- fluidPage(
                  tabPanel(textOutput("tab3_title"), value = 3,
                           br(),
                           plotlyOutput("comparisons_plot", height = 600),
-                          uiOutput("tab3_exceptions"),
-                          br(),
                           uiOutput("tab3_faithless"),
                           br(),
                           verbatimTextOutput("tab3_summary")),
@@ -312,18 +310,27 @@ server <- function(input, output, session) {
       
       #Exceptions.
       
+      exception_text <- function(df) {
+        
+        anchor_party <- df$aff 
+        other_party <- get_other_party(anchor_party) 
+        
+        with(df,
+             paste("In", paste(year, ",", sep = ""), state, "had", prettyNum(round(df[, anchor_party], 0), big.mark = ","), anchor_party,
+                   "votes and", prettyNum(round(df[, other_party], 0), big.mark = ","), other_party, "votes.<br>",
+                   paste("<br>", anchor_party, "s", sep = ""), "won", ec - 1, "Electoral College Votes and",
+                   paste(other_party, "s", sep = ""), "won 1 Electoral College Vote.<br>",
+                   "<br>See General Information."))
+      }
+      
       #Maine and Nebraska are not winner-take-all.
       if (((ref_df$year == 2008) & (ref_df$state == "Nebraska")) | 
           ((ref_df$year == 2016) & (ref_df$state == "Maine")) |
           ((ref_df$year == 2020) & (ref_df$state %in% c("Maine", "Nebraska")))) {
         
         ref_df$filling <- 1
-        ref_df$hover <- with(ref_df,
-                             paste("In", paste(year, ",", sep = ""), state, "had", prettyNum(round(ref_df[, anchor_party], 0), big.mark = ","), anchor_party,
-                                   "votes and", prettyNum(round(ref_df[, other_party], 0), big.mark = ","), other_party, "votes.<br>",
-                                   "<br>", paste(anchor_party, "s", sep = ""), "won", ec - 1, "Electoral College Votes and",
-                                   paste(other_party, "s", sep = ""), "won 1 Electoral College Vote.<br>",
-                                   "<br>See General Information.")) 
+        ref_df$hover <- exception_text(ref_df) 
+          
         #Dummy.
         com_df <- fill_df %>%
           filter(aff == "other")
@@ -396,6 +403,21 @@ server <- function(input, output, session) {
         fill_df <- rbind(ref_df, extra_df1, extra_df2)
       }
       
+      if ((input$elec_yr == 2008) & (input$state_select1 != "Nebraska")) {
+        fill_df[fill_df$state == "Nebraska",]$filling <- -2
+        fill_df[fill_df$state == "Nebraska",]$hover <- exception_text(fill_df[fill_df$state == "Nebraska",])
+        
+      } else if ((input$elec_yr == 2016) & (input$state_select1 != "Maine")) {
+        fill_df[fill_df$state == "Maine",]$filling <- -2
+        fill_df[fill_df$state == "Maine",]$hover <- exception_text(fill_df[fill_df$state == "Maine",])
+        
+      } else if ((input$elec_yr == 2020) & !(input$state_select1 %in% c("Maine", "Nebraska"))) {
+        fill_df[fill_df$state == "Maine",]$filling <- -2
+        fill_df[fill_df$state == "Nebraska",]$filling <- -2
+        fill_df[fill_df$state == "Maine",]$hover <- exception_text(fill_df[fill_df$state == "Maine",])
+        fill_df[fill_df$state == "Nebraska",]$hover <- exception_text(fill_df[fill_df$state == "Nebraska",])
+      }
+
       #States to Sum.              
     } else {
       pop_index <- length(integer(input$pop_metric))
@@ -583,35 +605,6 @@ server <- function(input, output, session) {
   
   output$comparisons_plot <- renderPlotly(map())
   
-  output$tab3_exceptions <- renderUI({
-    
-    if (input$elec_yr == 2008) {
-      exception <- create_html("Nebraska's popular vote split was 452,979 Republican and 333,319 Democrat, resulting in an",
-                               "Electoral College allocation ",
-                               "https://www.nytimes.com/elections/2008/results/states/nebraska.html",
-                               "of 4 to McCain and 1 to Obama.")
-    
-    } else if (input$elec_yr == 2016) {
-      exception <- create_html("Maine's popular vote split was 357,735 Democrat and 335,593 Republican, resulting in an",
-                             "Electoral College allocation ",
-                             "https://www.nytimes.com/elections/2016/results/maine",
-                             "of 3 to Clinton and 1 to Trump.")
-      
-    } else if (input$elec_yr == 2020) {
-    exception <- tagList(create_html("Maine's popular vote split was 435,072 Democrat and 360,737 Republican, resulting in an",
-                                     "Electoral College allocation ",
-                                     "https://www.nytimes.com/interactive/2020/11/03/us/elections/results-maine.html",
-                                     "of 3 to Biden and 1 to Trump."),
-                         create_html("Nebraska's popular vote split was 556,846 Republican and 374,583 Democrat, resulting in an",
-                                     "Electoral College allocation ",
-                                     "https://www.nytimes.com/interactive/2020/11/03/us/elections/results-nebraska.html",
-                                     "of 4 to Trump and 1 to Biden."))
-    }
-    
-    exception
-    
-  })
-  
   output$tab3_faithless <- renderUI({
     
     #Helper Text.
@@ -769,7 +762,7 @@ server <- function(input, output, session) {
                 "https://www.cbsnews.com/news/presidential-election-results-2020-electoral-college-same-2016/",
                 ".")})
   
-  output$tab9_text4 <- renderText("I created this interactive to exemplify flaws with a few metrics and calculations from recent elections.  Are some votes worth more because of their location?  Are some votes worth nothing at all?  Unfortunatley, the answer to both these questions is currently 'Yes'.")
+  output$tab9_text4 <- renderText("I created this interactive to exemplify flaws with a few metrics and calculations from recent elections.  Are some votes worth more because of their location?  Are some votes worth nothing at all?  Unfortunately, the answer to both these questions is currently 'Yes'.")
 
   output$tab9_links2 <- renderUI({
     tagList(create_html("Maine and Nebraska are slightly different from the other states.  This made a numerical difference for Nebraska in 2008, Maine in 2016, and both in 2020.  See",
