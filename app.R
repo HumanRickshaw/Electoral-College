@@ -177,7 +177,9 @@ ui <- fluidPage(
                  #Sum of States.                 
                  tabPanel(textOutput("tab4_title"), value = 4,
                           br(),
-                          htmlOutput("tab4_text1"),
+                          textOutput("tab4_text1"),
+                          br(),
+                          htmlOutput("tab4_text2"),
                           br(),
                           plotlyOutput("sum_plot", height = 600),
                           verbatimTextOutput("tab4_summary")),
@@ -422,7 +424,7 @@ server <- function(input, output, session) {
     } else {
       pop_index <- length(integer(input$pop_metric))
       fill_df <- fill_df %>%
-        select(all_of(pop_index), 6, 7) %>%
+        select(all_of(pop_index), 6:9) %>%
         mutate(f = ifelse(state %in% input$state_select2,
                           2,
                           sample(0:1, 2)))
@@ -577,6 +579,20 @@ server <- function(input, output, session) {
   })
   
   
+  
+  states_to_sum <- function(df, metric, column) {
+    
+    metric_states <- sum(df[df$f == 2,][, column])
+    metric_us <- sum(df[, column])
+    
+    percent <- paste(round(100 * metric_states / metric_us, 2), "%", sep = "")
+    
+    paste("The", metric, "of the selected state(s) was <b>", percent, "of the US's",
+          paste(metric, "</b>, or", sep = ""), prettyNum(metric_states, big.mark = ","),
+          "out of", paste(prettyNum(metric_us, big.mark = ","), ".", sep = ""))
+  }
+  
+  
 
   ##############Values by State##############
   output$tab1_title <- renderText("Values by State")
@@ -721,20 +737,26 @@ server <- function(input, output, session) {
   output$tab4_title <- renderText("States to Sum")
   
   output$tab4_text1 <- renderText({
-    
-    pop_index <- length(integer(input$pop_metric))
-    metric <- pop_list[pop_index]
-    
-    metric_states <- sum(fill_df()[fill_df()$f == 2,][,1])
-    metric_us <- sum(fill_df()[,1])
-    
-    percent <- paste(round(100 * metric_states / metric_us, 2), "%", sep = "")
-    
-    paste("In", paste(input$elec_yr, ", the", sep = ""), metric, "of the selected state(s) was <b>",
-          percent, "of the US's", paste(metric, "</b>, or", sep = ""), prettyNum(metric_states, big.mark = ","),
-          "out of", paste(prettyNum(metric_us, big.mark = ","), ".", sep = ""))
-    
+    "In 2016:"
   })
+  
+  output$tab4_text2 <- renderText({
+    
+    total_text <- states_to_sum(fill_df(),
+                                pop_list[length(integer(input$pop_metric))],
+                                1)
+    
+    rep_text <- states_to_sum(fill_df(),
+                              "Republican Vote",
+                              4)
+    
+    dem_text <- states_to_sum(fill_df(),
+                              "Democratic Vote",
+                              5)
+    
+    paste(total_text, rep_text, dem_text, sep = "<br/><br/>")
+  })
+
   
   output$sum_plot <- renderPlotly(map())
   
@@ -833,6 +855,16 @@ server <- function(input, output, session) {
                 "https://xkcd.com/2399/",
                 ".")
   })
+  
+  output$tab11_link3 <- renderUI({
+    tagList(create_html("Shoutout to",
+                        "National Popular Vote",
+                        "http://www.nationalpopularvote.com/",
+                        ""),
+            create_html("on",
+                        "Facebook",
+                        "https://www.facebook.com/nationalpopularvoteinc",
+                        "for running a Nonprofit organization and providing me a platform for some social media publicity."))})
 }
 
 
