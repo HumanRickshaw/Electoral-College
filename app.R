@@ -38,11 +38,8 @@ abb_list <- rep(state_abb, 7)
 ##############READ FILES##############
 
 #Read data.
-df <- as.data.frame(read_excel("./Electoral College.xlsx"))
-
-
 #Total voting population is sum of Red, Blue, and Other votes.
-df <- df %>%
+df <- data.frame(read_excel("./Electoral College.xlsx")) %>%
   mutate(p_voting = Republican + Democrat + other,
          abb = abb_list) %>%
   select(2:5, 10, 1, 11, 6:9)
@@ -54,8 +51,6 @@ df_usa <- df %>%
 #DF of all 50 states and DC.
 df <- df %>%
   filter(state != "United States")
-
-
 
 ##############FUNCTIONS##############
 
@@ -98,9 +93,8 @@ ui <- fluidPage(
                  h3("Select:"),
                  radioButtons("elec_yr",
                               "Election Year :",
-                              c(2016, 2012, 2008, 2004, 2000, 1996)),
-                 h6("November 2020 Election Data is not yet available."),
-      
+                              c(2020, 2016, 2012, 2008, 2004, 2000, 1996)),
+
                  #Values by State.
                  conditionalPanel(condition = "input.mytabs == 1",
                                   br(),
@@ -155,19 +149,22 @@ ui <- fluidPage(
       navbarPage(uiOutput("main_panel"), id = "mytabs",
 
                  #Values by State.                 
-                 tabPanel(textOutput("tab1_title"), value = 1,
+                 tabPanel("Values by State",
+                          value = 1,
                           br(),
                           plotlyOutput("pop_plot", height = 600),
                           verbatimTextOutput("tab1_summary")),
 
                  #Electoral College Weight per State.
-                 tabPanel(textOutput("tab2_title"), value = 2,
+                 tabPanel("Electoral College Weight by State",
+                          value = 2,
                           br(),
                           plotlyOutput("vote_w_plot", height = 600),
                           verbatimTextOutput("tab2_summary")),
 
                  #Counterintuitive State Comparisons.                          
-                 tabPanel(textOutput("tab3_title"), value = 3,
+                 tabPanel("Counterintuitive State Comparisons",
+                          value = 3,
                           br(),
                           plotlyOutput("comparisons_plot", height = 600),
                           uiOutput("tab3_faithless"),
@@ -175,11 +172,10 @@ ui <- fluidPage(
                           verbatimTextOutput("tab3_summary")),
 
                  #Sum of States.                 
-                 tabPanel(textOutput("tab4_title"), value = 4,
+                 tabPanel("States to Sum",
+                          value = 4,
                           br(),
-                          textOutput("tab4_text1"),
-                          br(),
-                          htmlOutput("tab4_text2"),
+                          htmlOutput("tab4_text1"),
                           br(),
                           plotlyOutput("sum_plot", height = 600),
                           verbatimTextOutput("tab4_summary")),
@@ -211,11 +207,16 @@ ui <- fluidPage(
                             tabPanel("Sources",
                                      tab_title("tab10_title"),
                                      br(),
-                                     uiOutput("tab10_links1"),
+                                     uiOutput("tab10_links1a"),
+                                     uiOutput("tab10_links1b"),
                                      br(),
                                      uiOutput("tab10_links2"),
                                      br(),
-                                     uiOutput("tab10_links3")),
+                                     uiOutput("tab10_links3"),
+                                     br(),
+                                     textOutput("tab10_links4"),
+                                     br(),
+                                     uiOutput("tab10_links5")),
                             
                             "------",
                             
@@ -258,19 +259,20 @@ server <- function(input, output, session) {
     #Filter for year.
     fill_df <- df %>%
       filter(year == input$elec_yr)
-
+     
     #Values by State.
     if (input$mytabs == 1) {
-
+      
       #Create hovertext.
       fill_df$hover <- with(fill_df,
                             paste("In", paste(year, ",", sep = ""), state, "had", prettyNum(p_total, big.mark = ","), "people and", ec, "Electoral College Votes.<br>",
                                   "<br>", prettyNum(p_eligible, big.mark = ","), "were eligible voters.",
                                   "<br>", prettyNum(p_registered, big.mark = ","), "were registered voters.",
                                   "<br>", prettyNum(p_voting, big.mark = ","), "actually voted."))
-
+    }
+    
     #Electoral College Weight per State.
-    } else if (input$mytabs == 2) {
+    else if (input$mytabs == 2) {
       
       #Get index and metric from user input.
       scale_index <- length(integer(input$color_map2))
@@ -278,29 +280,30 @@ server <- function(input, output, session) {
       
       #Divide metric by EC.
       fill_df$ec_ratio <- fill_df[, scale_index] / fill_df[, 1]
-
+      
       #State for year and metric with the highest pop per EC.
       anchor <- max(fill_df$ec_ratio)
       anchor_state <- fill_df$state[fill_df$ec_ratio == anchor]
       
       #All states compared to state with highest pop per EC.
       fill_df$ec_scaled <- anchor / fill_df$ec_ratio
-
+      
       #Create hovertext.
       fill_df$hover <- with(fill_df,
                             paste("In", paste(year, ",", sep = ""), state, "had a", metric, "of", prettyNum(fill_df[, scale_index], big.mark = ","), "and", ec, "Electoral College Votes.<br>",
                                   "<br>Dividing yields", prettyNum(round(ec_ratio, 0), big.mark = ","), "people per Electoral College Vote.<br>",
                                   "<br>Normalizing for the minimum,", anchor_state, "as 1.00, each", state, metric,
                                   "<br>vote weighs", round(ec_scaled, 2), "times that of a", anchor_state, metric, "vote."))
-      
-      #Counterintuitive State Comparisons.  
-    } else if (input$mytabs == 3) {
-      
+    }
+    
+    #Counterintuitive State Comparisons.  
+    else if (input$mytabs == 3) {
+
       #Did a state have more Republican or Democrat votes in the year?
       fill_df <- fill_df %>%
         mutate(aff = ifelse(Republican > Democrat, "Republican", "Democrat")) %>%
         select(year, ec, state, abb, Republican, Democrat, aff)
-      
+
       #Data only for user selected state.
       ref_df <- fill_df[fill_df[,"state"] == input$state_select1, ]
       
@@ -309,9 +312,7 @@ server <- function(input, output, session) {
       #Opposite color.
       other_party <- get_other_party(anchor_party)
       
-      
       #Exceptions.
-      
       exception_text <- function(df) {
         
         anchor_party <- df$aff 
@@ -332,7 +333,7 @@ server <- function(input, output, session) {
         
         ref_df$filling <- 1
         ref_df$hover <- exception_text(ref_df) 
-          
+        
         #Dummy.
         com_df <- fill_df %>%
           filter(aff == "other")
@@ -346,9 +347,10 @@ server <- function(input, output, session) {
         extra_df2 <- fill_df %>%
           filter(aff == anchor_party,
                  state != input$state_select1)
-        
-      #Else.
-      } else {
+      }
+      
+      #Normal situations.
+      else {
         
         anchor_votes <- ref_df[, anchor_party][[1]]
         other_votes <- ref_df[, other_party][[1]]
@@ -380,7 +382,7 @@ server <- function(input, output, session) {
                               prettyNum(round(other_votes, 0), big.mark = ","),
                               "who voted", other_party, "in", paste(ref_df$state, ".", sep = ""))
       }
-    
+      
       #Same party states.
       extra_df2$filling <- -2
       extra_df2$hover <- win_text(extra_df2, anchor_party)
@@ -400,28 +402,36 @@ server <- function(input, output, session) {
                               other_party, "votes in", ref_df$state, "<br>ignored by the Electoral College.")
         
         fill_df <- rbind(ref_df, com_df, extra_df1, extra_df2)
-        
-      } else {
+      }
+      
+      #Normal filling.
+      else {
         fill_df <- rbind(ref_df, extra_df1, extra_df2)
       }
       
+      #Nebraska in 2008.
       if ((input$elec_yr == 2008) & (input$state_select1 != "Nebraska")) {
         fill_df[fill_df$state == "Nebraska",]$filling <- -2
         fill_df[fill_df$state == "Nebraska",]$hover <- exception_text(fill_df[fill_df$state == "Nebraska",])
-        
-      } else if ((input$elec_yr == 2016) & (input$state_select1 != "Maine")) {
+      }
+      
+      #Maine in 2016.
+      else if ((input$elec_yr == 2016) & (input$state_select1 != "Maine")) {
         fill_df[fill_df$state == "Maine",]$filling <- -2
         fill_df[fill_df$state == "Maine",]$hover <- exception_text(fill_df[fill_df$state == "Maine",])
-        
-      } else if ((input$elec_yr == 2020) & !(input$state_select1 %in% c("Maine", "Nebraska"))) {
+      }
+      
+      #Maine and Nebraska in 2020
+      else if ((input$elec_yr == 2020) & !(input$state_select1 %in% c("Maine", "Nebraska"))) {
         fill_df[fill_df$state == "Maine",]$filling <- -2
         fill_df[fill_df$state == "Nebraska",]$filling <- -2
         fill_df[fill_df$state == "Maine",]$hover <- exception_text(fill_df[fill_df$state == "Maine",])
         fill_df[fill_df$state == "Nebraska",]$hover <- exception_text(fill_df[fill_df$state == "Nebraska",])
       }
-
-      #States to Sum.              
-    } else {
+    }
+    
+    #States to Sum.
+    else {
       pop_index <- length(integer(input$pop_metric))
       fill_df <- fill_df %>%
         select(all_of(pop_index), 6:9) %>%
@@ -429,9 +439,7 @@ server <- function(input, output, session) {
                           2,
                           sample(0:1, 2)))
     }
-    
     fill_df
-    
   })
   
   
@@ -445,9 +453,9 @@ server <- function(input, output, session) {
       #Maximum is based on California.
       max = c(56,
               (36 + 4 * floor(year / 2008)) * 1000000,
-              (24 + 4 * floor(year / 2016)) * 1000000,
+              (26 + 4 * floor(year / 2016)) * 1000000,
               (16 + 4 * floor(year / 2016)) * 1000000,
-              (12 + 4 * floor(year / 2004)) * 1000000)
+              (14 + 4 * floor(year / 2004)) * 1000000)
       
       ref = max[length(integer(input$color_map))]
       
@@ -473,7 +481,7 @@ server <- function(input, output, session) {
 
   
   map <- reactive({
-    
+ 
     #Projection.
     g <- list(scope = 'usa',
               projection = list(type = 'albers usa'),
@@ -504,8 +512,9 @@ server <- function(input, output, session) {
         
         title_text <- paste(input$elec_yr, 'Election Data for each State <br> (Hover for Information)')
         
+      }
       #Electoral College Weight per State.
-      } else {
+      else {
         
         fill_index <- length(integer(input$color_map2))
         
@@ -524,6 +533,7 @@ server <- function(input, output, session) {
         
         title_text <- paste(input$elec_yr, 'Electoral College Weight by State <br> (Hover for Information)')
       }
+      
       map <- map %>% colorbar(title = list(text = colorbar_text),
                               limits = colorbar_info()[[1]],
                               tickmode = 'array',
@@ -532,57 +542,60 @@ server <- function(input, output, session) {
                               titlefont = list(size = 16),
                               tickfont = list(size = 12))
     
-    } else {
-      #Counterintuitive State Comparisons.
-      if (input$mytabs == 3) {
-        
-        if (fill_df()$aff[1] == "Democrat") {
+    }
+    #Counterintuitive State Comparisons.
+    else if (input$mytabs == 3) {
+
+      if (fill_df()$aff[1] == "Democrat") {
           colors <- c("white", "white", "red", "blue")
           other_party <- "Republican" 
-          } else {
+      }
+      
+      else {
             colors <- c("white", "white", "blue", "red")
             other_party <- "Democrat" 
-          }
-        
-        map <- map %>% add_trace(z = ~filling,
-                                 text = ~hover,
-                                 hoverinfo = 'text',
-                                 locations = ~abb,
-                                 color = ~filling,
-                                 colors = colors)
-        
-        title_text <- with(fill_df(),
-                           paste(paste(state[1], "'s", sep = ""),
-                                 other_party, "Votes in", year,
-                                 "<br> (Hover for Information)"))
-        
-        #States to Sum.
-        } else {
+      }
       
-          map <- map %>% add_trace(z = ~f,
-                                   text = NULL,
-                                   hoverinfo = 'text',
-                                   locations = ~abb,
-                                   color = ~f,
-                                   colors = c("white", "white", "darkgreen"))
-          
-          title_text <- paste("Sum of Population of Selected States")
-        }
+      map <- map %>% add_trace(z = ~filling,
+                               text = ~hover,
+                               hoverinfo = 'text',
+                               locations = ~abb,
+                               color = ~filling,
+                               colors = colors)
       
-        map <- map %>% hide_colorbar()
+      title_text <- with(fill_df(),
+                         paste(paste(state[1], "'s", sep = ""),
+                               other_party, "Votes in", year,
+                               "<br> (Hover for Information)"))
+      
+      map <- map %>% hide_colorbar()
     }
     
-    map <- map %>% layout(title = list(text = title_text, y = 0.965),
-                          font = list(size = 18),
-                          geo = g)
-    map    
+    #States to Sum.
+    else {
+      
+      map <- map %>% add_trace(z = ~f,
+                               text = NULL,
+                               hoverinfo = 'text',
+                               locations = ~abb,
+                               color = ~f,
+                               colors = c("white", "white", "darkgreen"))
+      
+      title_text <- paste("Sum of Population of Selected States")
+      
+      map <- map %>% hide_colorbar()
+    }
+    
+  map <- map %>% layout(title = list(text = title_text, y = 0.965),
+                        font = list(size = 18),
+                        geo = g)
+  map    
   })
-  
   
   
   states_to_sum <- function(df, metric, column) {
     
-    metric_states <- sum(df[df$f == 2,][, column])
+    metric_states <- sum(df[df$f == 2, column])
     metric_us <- sum(df[, column])
     
     percent <- paste(round(100 * metric_states / metric_us, 2), "%", sep = "")
@@ -595,8 +608,6 @@ server <- function(input, output, session) {
   
 
   ##############Values by State##############
-  output$tab1_title <- renderText("Values by State")
-
   output$pop_plot <- renderPlotly(map())
 
   output$tab1_summary <- renderText(
@@ -606,8 +617,6 @@ server <- function(input, output, session) {
   
   
   ##############Electoral College Weight by State##############
-  output$tab2_title <- renderText("Electoral College Weight by State")
-  
   output$vote_w_plot <- renderPlotly(map())
 
   output$tab2_summary <- renderText(
@@ -617,8 +626,6 @@ server <- function(input, output, session) {
   
   
   ##############Counterintuitive State Comparisons##############
-  output$tab3_title <- renderText("Counterintuitive State Comparisons")
-  
   output$comparisons_plot <- renderPlotly(map())
   
   output$tab3_faithless <- renderUI({
@@ -659,106 +666,111 @@ server <- function(input, output, session) {
     }
   })
   
+
+  
   output$tab3_summary <- renderText({
     
-    year <- input$elec_yr
-    
-    #Tab.
-    tab <- "This tab was created to show how popular votes are ignored because of their location.\n\n"
-    
-    #Votes ignored.
-    
-    #Helper.
-    ignored <- function(year) {
+    if (input$mytabs == 3) {
+      #Tab.
+      tab <- "This tab was created to show how popular votes are ignored because of their location.\n\n"
       
-      ignored_text <- function(df, party) {
+      year <- input$elec_yr
+      
+      #State votes ignored by the Electoral College.
+      ignored <- function(year) {
         
-        other_party <- get_other_party(party)
-        
-        ignored_votes <- prettyNum((df %>%
-                                      filter(aff == party) %>%
-                                      select(other_party) %>%
-                                      sum),
-                                   big.mark = ",")
-        
-        paste("In", paste(year, ", the", sep = ""), other_party, "party received", ignored_votes, "votes from states won by", paste(party, "s,", sep = ""), "which the Electoral College ignored.\n\n")
+        ignored_text <- function(df, party) {
+          
+          other_party <- get_other_party(party)
+          
+          ignored_votes <- prettyNum((df %>%
+                                        filter(aff == party) %>%
+                                        select(other_party) %>%
+                                        sum),
+                                     big.mark = ",")
+          
+          paste("In", paste(year, ", the", sep = ""), other_party, "party received", ignored_votes, "votes from states won by", paste(party, "s,", sep = ""), "which the Electoral College ignored.\n\n")
         }
-
-      #Exceptions.
-      if (year == 2008) {
-        #Modify df.
-        ignored_df <- fill_df() %>% 
-          filter(state != "Nebraska")
         
-      } else if (year == 2016) {
-        #Modify df.
-        ignored_df <- fill_df() %>% 
-          filter(state != "Nebraska")
+        ignored_rep <- ignored_text(ignored_df(year, fill_df()), "Democrat")  
+        ignored_dem <- ignored_text(ignored_df(year, fill_df()), "Republican") 
         
-      } else if (year == 2020) {
-        #Modify df.
+        paste(ignored_rep, ignored_dem, sep = "")
+      }
+      
+      #Maine and Nebraska are not winner-take-all.
+      ignored_df <- function(year, df) {
         
-      } else {
-        ignored_df <- fill_df()
-      }  
+        if (year == 2008) {
+          df %>%
+            filter(state != "Nebraska")
+        }
+        
+        else if (year == 2016) {
+          df %>% 
+            filter(state != "Maine")
+        }
+        
+        else if (year == 2020) {
+          df %>% 
+            filter(!(state %in% c("Maine", "Nebraska")))
+        }
+        
+        else {
+          df
+        } 
+      }
       
-      ignored_rep <- ignored_text(ignored_df, "Democrat")  
-      ignored_dem <- ignored_text(ignored_df, "Republican") 
-      
-      paste(ignored_rep, ignored_dem, sep = "")
+      #Reform Party.
+      reform <- function(year) {
+        
+        reform_text <- function(year, votes) {
+          paste("In", year, "the Reform Party received", prettyNum(votes, big.mark = ","), "popular votes across the US, which the Electoral College ignored.")
+        }
+        
+        if (year == 1992) {
+          reform_text(year, 19743821)
+        }
+        
+        else if (year == 1996) {
+          reform_text(year, 8085294)
+        }
+        
+        else {
+          ""
+        }
+      }
+    
+      #Full text.
+      paste(tab, ignored(year), reform(year), sep = "")
     }
-    
-    
-    
-    #Reform Party.
-    
-    #Helper.
-    reform_text <- function(year, votes) {
-      paste("In", year, "the Reform Party recieved", prettyNum(votes, big.mark = ","), "popular votes across the US, which the Electoral College ignored.")
-    }
-    
-    if (year == 1992) {
-      reform <- reform_text(year, 19743821)
-    
-    } else if (year == 1996) {
-      reform <- reform_text(year, 8085294)
-      
-    } else {
-      reform <- ""
-    }
-    
-    #Full text.
-    paste(tab, ignored(year), reform, sep = "")
   })
-  
-  
+    
+
   
   ##############States to Sum##############
-  output$tab4_title <- renderText("States to Sum")
-  
   output$tab4_text1 <- renderText({
-    "In 2016:"
-  })
-  
-  output$tab4_text2 <- renderText({
     
-    total_text <- states_to_sum(fill_df(),
-                                pop_list[length(integer(input$pop_metric))],
-                                1)
-    
-    rep_text <- states_to_sum(fill_df(),
-                              "Republican Vote",
-                              4)
-    
-    dem_text <- states_to_sum(fill_df(),
-                              "Democratic Vote",
-                              5)
-    
-    paste(total_text, rep_text, dem_text, sep = "<br/><br/>")
+    if (input$mytabs == 4) {
+      yr_text <- paste("In ", input$elec_yr, ":", sep = "")
+      
+      total_text <- states_to_sum(fill_df(),
+                                  pop_list[length(integer(input$pop_metric))],
+                                  1)
+      
+      rep_text <- states_to_sum(fill_df(),
+                                "Republican Vote",
+                                4)
+      
+      dem_text <- states_to_sum(fill_df(),
+                                "Democratic Vote",
+                                5)
+      
+      paste(yr_text, total_text, rep_text, dem_text, sep = "<br/><br/>")
+    }
   })
 
-  
-  output$sum_plot <- renderPlotly(map())
+    output$sum_plot <- renderPlotly(map())
   
   output$tab4_summary <- renderText(paste("A common argument I have seen is something along the lines of:",
                                           "\n'But if we get rid of the Electoral College, California and New York will decide the president!'.",
@@ -816,12 +828,24 @@ server <- function(input, output, session) {
   #Sources.
   output$tab10_title <- renderText("Sources")
     
-  output$tab10_links1 <- renderUI({
+  output$tab10_links1a <- renderUI({
+    
     create_html("State, DC, and USA Population: ",
                 "Population and Housing Unit Estimation Tables (United States Census Bureau)",
                 "https://www.census.gov/programs-surveys/popest/data/tables.html",
                 ".")
-    })
+   })
+  
+  output$tab10_links1b <- renderUI({
+    
+    tagList("(2020 Population was taken from",
+            a("here",
+              href = "https://www2.census.gov/programs-surveys/decennial/2020/data/apportionment/population-change-data-table.pdf"),
+            "and will be updated in",
+            a("December",
+              href = "https://www.census.gov/programs-surveys/popest/about/schedule.html"),
+            ".)")
+  })
   
   output$tab10_links2 <- renderUI({
     create_html("State, DC, and USA Registration: ",
@@ -836,6 +860,26 @@ server <- function(input, output, session) {
                 "https://www.fec.gov/introduction-campaign-finance/election-and-voting-information/",
                 ".")
     })
+  
+  output$tab10_links4 <- renderText(
+    
+    "Unfortunately, several states had fewer registered voters than actual voters from the above for 2020. I went to state websites to get updated information.  Then I learned that the numbers vary quite a bit depending on date and source.",
+    
+  )
+  
+  output$tab10_links5 <- renderUI({
+
+    tagList(a("Colorado", href = "https://www.sos.state.co.us/pubs/elections/VoterRegNumbers/2020VoterRegNumbers.html"),
+            a("Florida", href = "https://dos.myflorida.com/elections/data-statistics/voter-registration-statistics/voter-registration-reportsxlsx/voter-registration-by-county-and-party/"),
+            a("Massachusetts", href = "https://www.sec.state.ma.us/ele/eleenr/enridx.htm"),
+            a("Michigan", href = "https://www.michigan.gov/documents/sos/2020_Registered_Voter_Count_682262_7.pdf"),
+            a("North Carolina", href = "https://vt.ncsbe.gov/RegStat/Results/?date=10%2F10%2F2020"),
+            a("Utah", href = "https://voteinfo.utah.gov/current-voter-registration-statistics/"),
+            a("Vermont", href = "https://sos.vermont.gov/voter-registration-stats/"),
+            a("Washington", href = "https://results.vote.wa.gov/results/20201103/turnout.html"))
+    })
+  
+
   
   
   
